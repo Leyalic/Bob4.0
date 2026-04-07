@@ -4,7 +4,7 @@ import os
 def al_pre_outbound(test, query, renamed):
 
     if test:
-        directory = os.path.realpath('C:\Testing Bob/ALT Loans/')
+        directory = os.path.realpath('C:/Testing Bob/ALT Loans/')
     else:
         directory = os.path.realpath('O:/Systems/QUERIES/ALT Loans/')
 
@@ -27,10 +27,10 @@ def al_pre_outbound(test, query, renamed):
     if query.startswith("UUFA_ALR_CL_APP_RSPNS_ERR"):
         return (query, renamed, directory, move_directory)
 
-    if query.startswith("UUFA_ALR_LN_FA907_1_REVISE"):
+    if query.startswith("UUFA_ALT_LN_AWRD_DISC"):
         return (query, renamed, directory, move_directory)
 
-    if query.startswith("UUFA_ALR_LN_FA907_2_REVISE"):
+    if query.startswith("UUFA_ALT_LN_NO_DISB"):
         return (query, renamed, directory, move_directory)
 
     if query.startswith("UUFA_ALR_LN_SENT_NO_RESP"):
@@ -61,6 +61,18 @@ def al_pre_outbound(test, query, renamed):
         return (query, renamed, directory, move_directory)
 
     if query.startswith("UUFA_ALR_LOAN_SPC_NEED_OVWD"):
+        return (query, renamed, directory, move_directory)
+    
+    if query.startswith("UUFA_ALT_LOANS_RECIEVED_NO_SSN"):
+        return (query, renamed, directory, move_directory)
+    
+    if query.startswith("UUFA_ALT_LOANS_SSN_MATCH"):
+        return (query, renamed, directory, move_directory)
+    
+    if query.startswith("UUFA_ALT_LN_AWRD_DISC"):
+        return (query, renamed, directory, move_directory)
+    
+    if query.startswith("UUFA_ALT_LN_NO_DISB"):
         return (query, renamed, directory, move_directory)
 
     return "Empty" #Leave as final line

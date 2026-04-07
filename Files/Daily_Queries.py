@@ -366,7 +366,18 @@ def do_dailies(test, date, year, query, renamed):
     
     if "UUFA_PELL_RSP_DSB_AWARD" in query :
         return(query, renamed, pell_directory, move_pell_directory)
+    
+    if "UUFA_PRCNT_USED_TOT_CHECK" in query :
+        return(query, renamed, pell_directory, move_pell_directory)
+    
+    if query.startswith("UUFA_IL_COMBINED_NOPOST"):
+        return (query, renamed, archive_directory, move_directory)
+    
+    if query.startswith("UUFA_IL_COMBINED_NOPOST2"):
+        return (query, renamed, archive_directory, move_directory)
+
+    if query.startswith("UUFA_IL_FA_DISB_NOT_MATCH_IA"):
+        return (query, renamed, archive_directory, move_directory)
 
     return "Empty" #Leave as last line
-
 

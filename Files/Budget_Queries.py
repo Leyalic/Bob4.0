@@ -7,7 +7,7 @@ def do_budget_queries(test, date, year, query, renamed):
     month_folder = date[:2] + "-20" + date[-2:]
     
     if test:
-        directory = os.path.realpath(os.path.join('C:\Testing Bob/Budgets', aid_year, month_folder))
+        directory = os.path.realpath(os.path.join('C:/Testing Bob/Budgets', aid_year, month_folder))
     else:
         directory = os.path.realpath(os.path.join('O:/Systems/QUERIES/Budgets', aid_year, month_folder))
 
@@ -54,9 +54,6 @@ def do_budget_queries(test, date, year, query, renamed):
     if query.startswith("UUFA_BR_NO_BUDGET_ATTEND")  :
         return (query, renamed, directory, move_directory)
 
-    if query.startswith("UUFA_BR_PELL_COA_BLANK")  :
-        return (query, renamed, directory, move_directory)
-
     if (("BR_PELL_COA_CHECK" in query) ) :
         return (query, renamed, directory, move_directory)
 
@@ -95,6 +92,18 @@ def do_budget_queries(test, date, year, query, renamed):
 
     if "UUFA_BR_COA_ONLINE" in query:
         return (query, renamed, directory, move_directory)
+    
+    if query.startswith("UUFA_BR_MANUAL_BDGT_NO_FEE")  :
+        return (query, renamed, directory, move_directory)
+    
+    if query.startswith("UUFA_USA_HRE_HOUSING")  :
+        return (query, renamed, directory, move_directory)
+    
+    if query.startswith("UUFA_HOUSING_CIS_UPDT")  :
+        return (query, renamed, directory, move_directory)
+    
+    if query.startswith("UUFA_BUDGETED_STDNT_INFO")  :
+        return (query, renamed, directory, move_directory)
 
     return "Empty" #Leave as last line
 
@@ -108,7 +117,7 @@ def do_budget_test_queries(test, date, year, query, renamed):
     month_folder = date[:2] + "-20" + date[-2:]
 
     if test:
-        directory = os.path.realpath(os.path.join('C:\Testing Bob/Budgets', aid_year, month_folder,"Wrong Budget Queries"))
+        directory = os.path.realpath(os.path.join('C:/Testing Bob/Budgets', aid_year, month_folder,"Wrong Budget Queries"))
     else:
         directory = os.path.realpath(os.path.join('O:/Systems/QUERIES/Budgets', aid_year, month_folder, "Wrong Budget Queries"))
 

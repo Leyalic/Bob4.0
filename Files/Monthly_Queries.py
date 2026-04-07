@@ -214,6 +214,12 @@ def do_monthlies(test, date, year, query, renamed):
 
     if "UUFA_EXPECTED_GRAD_DATE_ERROR" in query :
         return (query, renamed, directory, move_directory)
+    
+    if "UUFA_STP_MISSING_DISB_RULES" in query :
+        return (query, renamed, directory, move_directory)
+    
+    if "UUFA_MR_FDEGRX_FABCX_FBLKD" in query :
+        return (query, renamed, directory, move_directory)
 
     return "Empty" #Leave as last line
 

@@ -4,9 +4,9 @@ import os
 def do_end_of_term_queries(test, date, year, query, renamed):
 
     if test:
-        directory = os.path.realpath(os.path.join('C:\Testing Bob/SAP/', year))
+        directory = os.path.realpath(os.path.join('C:/Testing Bob/SAP/', year))
     else:
-        directory = os.path.realpath(os.path.join('O:\Systems\QUERIES/SAP/', year))
+        directory = os.path.realpath(os.path.join('O:/Systems/QUERIES/SAP/', year))
 
     if not os.path.isdir(directory):
         os.makedirs(directory)

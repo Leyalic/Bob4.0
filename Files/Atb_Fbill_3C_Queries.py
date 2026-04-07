@@ -5,7 +5,7 @@ def do_atb_fb_3c_queries(test, query, renamed):
 
     if test:
         directory = os.path.realpath(os.path.join('C:/Testing Bob/QUERIES/3C Queries'))
-        atb_directory = os.path.realpath(os.path.join('C:/Testing Bob/QUERIES\ATB'))
+        atb_directory = os.path.realpath(os.path.join('C:/Testing Bob/QUERIES/ATB'))
     else:
         directory = os.path.realpath(os.path.join('O:/Systems/QUERIES/3C Queries'))
         atb_directory = os.path.realpath(os.path.join('O:/Systems/QUERIES/ATB'))
@@ -90,6 +90,9 @@ def do_atb_fb_3c_queries(test, query, renamed):
         return (query, renamed, atb_directory, atb_move_directory)
 
     if ("UUFA_ATB_SEQUENCE_DIFFERENCE" in query):
+        return (query, renamed, atb_directory, atb_move_directory)
+    
+    if ("UUFA_ATB_SEQUENCE_DIFFEREN" in query):
         return (query, renamed, atb_directory, atb_move_directory)
 
     return "Empty" #Leave as last line

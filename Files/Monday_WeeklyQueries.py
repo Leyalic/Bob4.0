@@ -11,11 +11,13 @@ def do_monday_weeklies(test, date, year, query, renamed):
         packaging_directory     = os.path.realpath(os.path.join('C:/Testing Bob/Packaging', aid_year, month_folder))
         disb_failure_directory  = os.path.realpath(os.path.join('C:/Testing Bob/Disb Failure ' + aid_year))
         save_directory          = os.path.realpath(os.path.join('C:/Testing Bob/SAVE', aid_year))
+        daily_ea_directory      = os.path.realpath("O:/Testing Bob/External Awards/External Award Queries")
     else:
         directory               = os.path.realpath(os.path.join('O:/Systems/QUERIES/Monday Weekly', aid_year, month_folder))
         packaging_directory     = os.path.realpath(os.path.join('O:/Systems/QUERIES/Packaging', aid_year, month_folder))
         disb_failure_directory  = os.path.realpath(os.path.join('O:/Disbursement Failure/Disb Failure ' + aid_year))
         save_directory          = os.path.realpath(os.path.join('O:/Systems/QUERIES/SAVE', aid_year))
+        daily_ea_directory      = os.path.realpath("O:/Systems/External Awards/External Award Queries")
 
     if not os.path.isdir(directory):
         os.makedirs(directory)
@@ -42,67 +44,67 @@ def do_monday_weeklies(test, date, year, query, renamed):
     if "UUFA_UOSFA_1690_LN_TYPES" in query :
         return (query, renamed, directory, move_directory)
 
-    if "_WR_ACAD_LVLS_OUT_SYNC" in query :
+    if "UUFA_WR_ACAD_LVLS_OUT_SYNC" in query :
         return (query, renamed, directory, move_directory)
 
-    if "_WR_ADV_FSOI_INITIATED" in query :
+    if "UUFA_WR_ADV_FSOI_INITIATED" in query :
         return (query, renamed, directory, move_directory)
 
-    if "_WR_AGG_CK_MLT_YR_AWDED" in query :
+    if "UUFA_WR_AGG_CK_MLT_YR_AWDED" in query :
         return (query, renamed, directory, move_directory)
 
-    if "_WR_AID_DISB_NO_ENR_ATH" in query :
+    if "UUFA_WR_AID_DISB_NO_ENR_ATH" in query :
         return (query, renamed, directory, move_directory)
 
-    if "_WR_AID_DISB_NO_ENR_FED" in query :
+    if "UUFA_WR_AID_DISB_NO_ENR_FED" in query :
         return (query, renamed, directory, move_directory)
 
-    if "_WR_AID_DISB_NO_ENR_SCH" in query :
+    if "UUFA_WR_AID_DISB_NO_ENR_SCH" in query :
         return (query, renamed, directory, move_directory)
 
-    if "_WR_ALL_V4_V5_VER" in query :
+    if "UUFA_WR_ALL_V4_V5_VER" in query :
         return (query, renamed, directory, move_directory)
 
-    if "_WR_AMERICORP_AWD_POST" in query :
+    if "UUFA_WR_AMERICORP_AWD_POST" in query :
         return (query, renamed, directory, move_directory)
 
-    if "_WR_ATHLETE_NOT_DISB" in query :
+    if "UUFA_WR_ATHLETE_NOT_DISB" in query :
         return (query, renamed, directory, move_directory)
 
-    if "_WR_ATH_HRS_AFTR_CENSUS" in query :
+    if "UUFA_WR_ATH_HRS_AFTR_CENSUS" in query :
         return (query, renamed, directory, move_directory)
 
-    if "_WR_ATH_SF_TERM_BALANCE" in query :
+    if "UUFA_WR_ATH_SF_TERM_BALANCE" in query :
         return (query, renamed, directory, move_directory)
 
-    if "_WR_AUDIT_CLSS_AID_DISB" in query :
+    if "UUFA_WR_AUDIT_CLSS_AID_DISB" in query :
         return (query, renamed, directory, move_directory)
 
-    if "_WR_ISA_PER_TERM" in query :
+    if "UUFA_WR_ISA_PER_TERM" in query :
         return (query, renamed, directory, move_directory) 
 
-    if "_WR_AWD_UG_NOW_GRAD_ATH" in query :
+    if "UUFA_WR_AWD_UG_NOW_GRAD_ATH" in query :
         return (query, renamed, directory, move_directory)
 
-    if "_WR_AWD_UG_NOW_GRAD_FC" in query :
+    if "UUFA_WR_AWD_UG_NOW_GRAD_FC" in query :
         return (query, renamed, directory, move_directory)
 
-    if "_WR_AWD_UG_NOW_GRAD_SV" in query :
+    if "UUFA_WR_AWD_UG_NOW_GRAD_SV" in query :
         return (query, renamed, directory, move_directory)
 
-    if "_WR_CHKLST_STATUS_ERROR" in query :
+    if "UUFA_WR_CHKLST_STATUS_ERROR" in query :
         return (query, renamed, directory, move_directory)
 
-    if "WR_CMT_CDE_O_AGR_LMT_2" in query :
+    if "UUFA_WR_CMT_CDE_O_AGR_LMT_2" in query :
         return (query, renamed, directory, move_directory)
 
-    if "_WR_DISB_ATH_FAILURE" in query :
+    if "UUFA_WR_DISB_ATH_FAILURE" in query :
         return (query, renamed, disb_failure_directory, move_disb_directory)
 
-    if "_WR_DL_DISBURSED_LTHT" in query :
+    if "UUFA_WR_DL_DISBURSED_LTHT" in query :
         return (query, renamed, directory, move_directory)
 
-    if "_WR_DL_EC_SUSPENDED" in query :
+    if "UUFA_WR_DL_EC_SUSPENDED" in query :
         return (query, renamed, directory, move_directory)
 
     if "_WR_DL_ORIG_TRNS_PEND" in query :
@@ -420,6 +422,15 @@ def do_monday_weeklies(test, date, year, query, renamed):
 
     if "_WR_STDNT_NOT_PACKAGED" in query :
         return (query, renamed, directory, move_directory)
+    
+    if "UUFA_WR_DSB_PLN_SPLT_CD_FD" in query :
+        return (query, renamed, directory, move_directory)
+    
+    if "UUFA_WR_PELL_ELG_NO_PELL" in query :
+        return (query, renamed, directory, move_directory)
+    
+    if "UUFA_WR_CTZN_IND_AWD_NO_LN" in query :
+        return (query, renamed, directory, move_directory)
 
     if "WR_SAVE_CTZNSHIP_VER" in query :
         return (query, renamed, save_directory, move_save_directory)
@@ -429,8 +440,16 @@ def do_monday_weeklies(test, date, year, query, renamed):
 
     if "WR_CORRECTION_NOT_SENT" in query :
         return (query, renamed, save_directory, move_save_directory)
+    
+    if "UUFA_WR_WITH_COMMENT_CODE" in query :
+        return (query, renamed, save_directory, move_save_directory)
+    
+    if "UUFA_WR_BLANK_LOAN_TYPE" in query :
+        return (query, renamed, save_directory, move_save_directory)
+    
+    if "UUFA_WR_TSM_ALERTS" in query :
+        return (query, renamed, directory, move_directory)
 
-    # Manually run Queries
     if "_WR_LOAN_EFT_DETAIL_ERROR" in query:
         return (query, renamed, directory, move_directory)
 
@@ -440,9 +459,45 @@ def do_monday_weeklies(test, date, year, query, renamed):
     if "UUFA_AP_RPKG_FPEL_AWARD_LCK" in query:
         return (query, renamed, directory, move_directory)
 
-    if "WR_FAVR_I_NO_FCOR_ALL_C" in query:
+    if "_WR_FAVR_I_NO_FCOR_ALL_C" in query:
         return (query, renamed, directory, move_directory)
-
+    
+    if "UUFA_SCHADM_DUALCAR" in query :
+        return (query, renamed, daily_ea_directory, move_directory)
+    
+    if "UUFA_WR_DEFERMENT_REPORT" in query:
+        return (query, renamed, directory, move_directory)
+    
+    if "UUFA_WR_BDGT_LN_FEE_MNL" in query:
+        return (query, renamed, directory, move_directory)
+    
+    if "UUFA_WR_RESIDENCY_RECLASS" in query:
+        return (query, renamed, directory, move_directory)
+    
+    if "UUFA_WR_SCH_PLACEHOLDER" in query:
+        return (query, renamed, directory, move_directory)
+    
+    if "UUFA_WR_BDGT_LN_FEE_MNL" in query:
+        return (query, renamed, directory, move_directory)
+    
+    if "UUFA_WR_OUTSIDE_RESOURCES" in query:
+        return (query, renamed, directory, move_directory)
+    
+    if "UUFA_WR_RESIDENCY_RECLASS" in query:
+        return (query, renamed, directory, move_directory)
+    
+    if "UUFA_WR_CTZN_IND_AWD_NO_LN" in query:
+        return (query, renamed, directory, move_directory)
+    
+    if "UUFA_WR_OUTSIDE_RESOURCES" in query:
+        return (query, renamed, directory, move_directory)
+    
+    if "UUFA_WR_PRO_STDNT_NOT_PACK" in query:
+        return (query, renamed, directory, move_directory)
+    
+    if "UUFA_WR_PHARM_ENRL_W_LOAN" in query:
+        return (query, renamed, directory, move_directory)
+    
     # Packaging queries that are being manually run.
     if "PRT_ATH_ACCEPT_FED_AID" in query :
         return (query, renamed, packaging_directory, move_pack_directory)
@@ -455,8 +510,5 @@ def do_monday_weeklies(test, date, year, query, renamed):
 
     if "PRT_ATH_OFFERED_FED_AID" in query :
         return (query, renamed, packaging_directory, move_pack_directory)
-
-    if "UUFA_WR_TSM_ALERTS" in query :
-        return (query, renamed, directory, move_directory)
 
     return "Empty" #Leave as last line

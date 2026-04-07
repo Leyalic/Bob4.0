@@ -4,9 +4,9 @@ import os
 def dl_pre_outbound(test, date, year, query, renamed):
 
     if test:
-        directory = os.path.realpath(os.path.join('C:\Testing Bob/Direct Loans', 'DL Pre-Outbound'))
-        heal_directory = os.path.realpath(os.path.join('C:\Testing Bob/Direct Loans', 'DL HEAL Flag'))
-        response_directory = os.path.realpath(os.path.join('C:\Testing Bob/Direct Loans', 'DL Response Files'))
+        directory = os.path.realpath(os.path.join('C:/Testing Bob/Direct Loans', 'DL Pre-Outbound'))
+        heal_directory = os.path.realpath(os.path.join('C:/Testing Bob/Direct Loans', 'DL HEAL Flag'))
+        response_directory = os.path.realpath(os.path.join('C:/Testing Bob/Direct Loans', 'DL Response Files'))
     else:
         directory = os.path.realpath(os.path.join('O:/Systems/Direct Loans', 'DL Pre-Outbound'))
         heal_directory = os.path.realpath(os.path.join('O:/Systems/Direct Loans', 'DL HEAL Flag'))
@@ -59,8 +59,7 @@ def dl_pre_outbound(test, date, year, query, renamed):
 
     if query.startswith("UUFA_DLR_LOAN_ORIG_SPLT_CDS"):
         return (query, renamed, directory, move_directory)
-
-    # Possibly remove
+    
     if "DLR_LN_ORIG_VLOAN_RSN" in query:
         return (query, renamed, directory, move_directory)
 
@@ -84,5 +83,8 @@ def dl_pre_outbound(test, date, year, query, renamed):
 
     if query.startswith("UUFA_ADJUST_LOAN_DATES"):
         return (query, renamed, directory, other_directory)
-                
+    
+    if query.startswith("UUFA_IL_RPKG_DL_OFFERS"):
+        return (query, renamed, directory, other_directory)
+    
     return "Empty" #Leave as final line

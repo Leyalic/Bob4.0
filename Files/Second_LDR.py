@@ -6,7 +6,7 @@ def do_2nd_ldr(test, year, query, renamed):
     aid_year = str(int(year) - 1) + "-" + str(year)
 
     if test:
-        directory = os.path.realpath(os.path.join('C:\Testing Bob/Term', aid_year))
+        directory = os.path.realpath(os.path.join('C:/Testing Bob/Term', aid_year))
     else:
         directory = os.path.realpath(os.path.join('O:/Systems/QUERIES/Term', aid_year))
 

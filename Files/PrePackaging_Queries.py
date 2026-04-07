@@ -6,7 +6,7 @@ def do_pre_repackaging(test, year, query, renamed):
     aid_year = str(int(year) - 1) + "-" + str(year)
 
     if test:
-        directory = os.path.realpath(os.path.join('C:\Testing Bob/Pell Repackaging', aid_year))
+        directory = os.path.realpath(os.path.join('C:/Testing Bob/Pell Repackaging', aid_year))
     else:
         directory = os.path.realpath(os.path.join('O:/Systems/QUERIES/Pell Repackaging', aid_year))
 

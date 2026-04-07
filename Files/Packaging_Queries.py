@@ -7,7 +7,7 @@ def do_packaging_queries(test, date, year, query, renamed):
     month_folder = date[:2] + "-20" + date[-2:]
 
     if test:
-        directory = os.path.realpath(os.path.join('C:\Testing Bob/Packaging', aid_year, month_folder))
+        directory = os.path.realpath(os.path.join('C:/Testing Bob/Packaging', aid_year, month_folder))
     else:
         directory = os.path.realpath(os.path.join('O:/Systems/QUERIES/Packaging', aid_year, month_folder))
 
@@ -190,6 +190,24 @@ def do_packaging_queries(test, date, year, query, renamed):
         return (query, renamed, directory, move_directory)
 
     if query.startswith("UUFA_READY_PKG"):
+        return (query, renamed, directory, move_directory)
+    
+    if query.startswith("UUFA_RPKG_LVL"):
+        return (query, renamed, directory, move_directory)
+    
+    if query.startswith("UUFA_PLACE_FA9"):
+        return (query, renamed, directory, move_directory)
+    
+    if query.startswith("UUFA_PELL_LEU_450"):
+        return (query, renamed, directory, move_directory)
+    
+    if query.startswith("UUFA_BATCH_PKG_DETAIL"):
+        return (query, renamed, directory, move_directory)
+    
+    if query.startswith("UUFA_PKG_SELECT_1ST_RUN"):
+        return (query, renamed, directory, move_directory)
+    
+    if query.startswith("UUFA_PKG_SELECT_SMR"):
         return (query, renamed, directory, move_directory)
 
     return "Empty" #Leave as last line

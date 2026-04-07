@@ -6,7 +6,7 @@ def do_day_after_ldr(test, year, query, renamed):
     aid_year = str(int(year) - 1) + "-" + str(year)
 
     if test:
-        directory = os.path.realpath(os.path.join('C:\Testing Bob/LDR', aid_year))
+        directory = os.path.realpath(os.path.join('C:/Testing Bob/LDR', aid_year))
     else:
         directory = os.path.realpath(os.path.join('O:/Systems/QUERIES/LDR', aid_year))
 

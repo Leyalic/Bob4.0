@@ -8,11 +8,11 @@ def do_disb_queries(test, date, year, query, renamed, renamed_disb):
     month_folder = date[:2] + "-20" + date[-2:]
 
     if test:
-        directory = os.path.realpath(os.path.join('C:\Testing Bob/Disbursement', aid_year, month_folder))
-        pell_directory = os.path.realpath(os.path.join('C:\Testing Bob\Pell Reports', aid_year, month_folder))
+        directory = os.path.realpath(os.path.join('C:/Testing Bob/Disbursement', aid_year, month_folder))
+        pell_directory = os.path.realpath(os.path.join('C:/Testing Bob/Pell Reports', aid_year, month_folder))
     else:
-        directory = os.path.realpath(os.path.join('O:\Systems\QUERIES\Disbursement', aid_year, month_folder))
-        pell_directory = os.path.realpath(os.path.join('O:\Systems\Pell Reports', aid_year, month_folder))
+        directory = os.path.realpath(os.path.join('O:/Systems/QUERIES/Disbursement', aid_year, month_folder))
+        pell_directory = os.path.realpath(os.path.join('O:/Systems/Pell Reports', aid_year, month_folder))
 
     if not os.path.isdir(directory):
         os.makedirs(directory)

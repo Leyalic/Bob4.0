@@ -71,7 +71,7 @@ instance_regex = ["[_][0-9]{2}[_-][0-9]+\.", "[_-][0-9]+\."]
 # Directories
 #test_UOSFA_directory = Path("C:/Users/iessaghir/Documents/DoQueries/Destination Folders")
 #test_UOSFA_directory = Path("C:/Users/JHARDY/Documents/DoQueries/Destination Folders")
-test_UOSFA_directory = Path("O:/UOSFA Reports/Testing/Destination Folders")
+test_UOSFA_directory = Path("C:/UOSFA Reports/Testing/Destination Folders")
 
 UOSFA_directory = Path("O:/UOSFA Reports")
 
@@ -330,19 +330,21 @@ def search_excel_file(filename):
         while sheet.cell(curr_row, 1).value is not None:
             value = sheet.cell(curr_row, aid_col).value
             if is_aid_year_word(value):
-                if is_aid_year_num(value):
-                    value_int = int(value[-2:])
-                    if value_int > max_year:
-                        max_year = value_int
-                        has = True
-                        year = "20" +  str(value)[-2:]                     
-                elif is_date(value):
-                    value_int = int(value[-2:])
-                    if value_int > max_year:
-                        max_year = value_int
-                        has = True
-                        year = "20" +  str(value)[-2:] # Assumes date format w/ year at end
-                curr_row = curr_row + 1
+                while sheet.cell(curr_row, 1).value is not None:
+                    value = sheet.cell(curr_row, aid_col).value
+                    if is_aid_year_num(value):
+                        value_int = int(value[-2:])
+                        if value_int > max_year:
+                            max_year = value_int
+                            has = True
+                            year = "20" +  str(value)[-2:]                     
+                    elif is_date(value):
+                        value_int = int(value[-2:])
+                        if value_int > max_year:
+                            max_year = value_int
+                            has = True
+                            year = "20" +  str(value)[-2:] # Assumes date format w/ year at end
+                    curr_row = curr_row + 1
 
     workbook.close()
     return (has, year)
