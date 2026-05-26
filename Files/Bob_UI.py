@@ -47,8 +47,6 @@ date = time.strftime("%x").replace("/", "-")
 
 running_text = "Program running, please do not close the window"
 
-test = False
-
 #Adding widgets
 
 class BobWindow(tk.Frame):
@@ -217,7 +215,7 @@ class BobWindow(tk.Frame):
             self.run_label["text"] = running_text
 
             aid_year = self.t1.get()           
-            direct_loan_flag, alt_loan_flag, unknown_list = Do_Queries_Functions.run(self.t1.get(), test)
+            direct_loan_flag, alt_loan_flag, unknown_list = Do_Queries_Functions.run(self.t1.get(), self.test_var.get())
 
             if len(unknown_list) > 0:
                 # Disable all window input here
@@ -280,7 +278,7 @@ class BobWindow(tk.Frame):
     def reset_test_folder(self):
         #direct = Path("C:/Users/JHARDY/Documents/DoQueries/Destination Folders")
         #direct = Path("C:/Users/iessaghir/Documents/DoQueries/Destination Folders")
-        direct = Path("O:/UOSFA Reports/Testing/Destination Folders")
+        direct = Path("C:/UOSFA Reports/Testing/Destination Folders")
 
         for folder in os.listdir(direct):
             path = direct / Path(folder)
@@ -289,40 +287,47 @@ class BobWindow(tk.Frame):
         print("Done Resetting")
 #############################################################################################
 
+    def toggle_test_mode(self):
+        if self.test_var.get():
+            self.test_check.config(text="Test Mode  (files go to Testing folder)", fg='blue')
+            self.reset_button.pack(side=BOTTOM, anchor="s", padx=8, pady=8)
+        else:
+            self.test_check.config(text="PRODUCTION MODE  (files will be moved for real!)", fg='red')
+            self.reset_button.pack_forget()
 
     def __init__(self, win):
         tk.Frame.__init__(self, win)
         self.lbl1=Label(win, text='Please enter the aid year', fg='black', font=("Times New Roman bold", 13))
-       
+
         aid_valid = (self.register(self.validate_aid_year),
                 '%d', '%i', '%P', '%s', '%S', '%v', '%V', '%W')
 
         self.t1=Entry(bd=10, validate="all", validatecommand=aid_valid)
-        
+
         self.aid_warn_label = Label(win, text="", fg='blue', font=("Times New Roman bold", 13))
         self.aid_warn_label.place(x=570, y=340)
 
-
         self.lbl1.place(x=200, y=300)
         self.t1.place(x=600, y=300)
-        
-        self.run_label = Label(win, text="", fg='red', font=("Times New Roman bold", 13)) 
+
+        self.run_label = Label(win, text="", fg='red', font=("Times New Roman bold", 13))
         self.run_label.place(x=260, y=375)
 
-        
-        #################################################################
-        #################################################################
-        if test:
-            self.reset_button = Button(rootWindow, text="Reset Test Folders", command=self.reset_test_folder)
-            self.reset_button.pack(side=BOTTOM, anchor="s", padx=8, pady=8)
-        #################################################################
-        #################################################################
+        # Test mode toggle — defaults to True (safe).
+        # Packed between Reset and Run so it is never obscured by other widgets.
+        self.test_var = tk.BooleanVar(value=True)
+        self.reset_button = Button(rootWindow, text="Reset Test Folders", command=self.reset_test_folder)
+        self.reset_button.pack(side=BOTTOM, anchor="s", padx=8, pady=8)
 
+        self.test_check = Checkbutton(win, text="Test Mode  (files go to Testing folder)",
+                                      variable=self.test_var, command=self.toggle_test_mode,
+                                      fg='blue', font=("Times New Roman bold", 11))
+        self.test_check.pack(side=BOTTOM, anchor="center", padx=8, pady=4)
 
         #Create a button in the main Window to open the popup
         self.b1=Button(win, text="Run", font=('Helvatical bold',12), bd="4", command=self.open_popup, height=2, width=10)
         self.b1.pack(side=BOTTOM, anchor="center",padx=18, pady=18)
-    
+
         self.exit_Button = Button(rootWindow, text="Exit Program", command=rootWindow.destroy)
         self.exit_Button.pack(side=BOTTOM, anchor="e", padx=8, pady=8)
 

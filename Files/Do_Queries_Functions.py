@@ -14,8 +14,8 @@ from pathlib import Path
 import csv
 import warnings
 import io
+import logging
 
-{}
 # Query imports
 import sys
 sys.path.insert(1, '../Files/')
@@ -36,6 +36,22 @@ from Files import PrePackaging_Queries
 from Files import Scholarships_Queries
 from Files import Second_LDR
 from Files import Tsm_Queries
+
+# Configure logging with both console and file output
+_log_dir = Path("./logs")
+_log_dir.mkdir(exist_ok=True)
+_log_file = _log_dir / f"bob_queries_{time.strftime('%Y%m%d_%H%M%S')}.log"
+
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler(_log_file),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger(__name__)
+logger.info(f"Logging initialized - Log file: {_log_file}")
 
 
 global test
@@ -59,6 +75,7 @@ folder_path = Path()
 disbursement_date = datetime.datetime.min
 alt_loan_flag = False
 direct_loan_flag = False
+excel_parse_cache = {}  # Cache for Excel file parsing to avoid re-opening files
 
 # Regular Expressions
 aid_year_regex = ["Aid[\s]?Y(ea)?r", "Year"]
@@ -74,6 +91,31 @@ instance_regex = ["[_][0-9]{2}[_-][0-9]+\.", "[_-][0-9]+\."]
 test_UOSFA_directory = Path("C:/UOSFA Reports/Testing/Destination Folders")
 
 UOSFA_directory = Path("O:/UOSFA Reports")
+
+# Query Routing Dictionary - maps query functions and metadata
+# Format: (name, function, [arg_keys], sets_flag)
+# arg_keys reference values from the local scope in move_files()
+QUERY_MODULES = [
+    ('Daily Queries', Daily_Queries.do_dailies, ['test', 'date', 'year', 'filename', 'renamed'], None),
+    ('Monday Weekly', Monday_WeeklyQueries.do_monday_weeklies, ['test', 'date', 'year', 'filename', 'renamed'], None),
+    ('Budget Queries', Budget_Queries.do_budget_queries, ['test', 'date', 'year', 'filename', 'renamed'], None),
+    ('Packaging Queries', Packaging_Queries.do_packaging_queries, ['test', 'date', 'year', 'filename', 'renamed'], None),
+    ('Monthly Queries', Monthly_Queries.do_monthlies, ['test', 'date', 'year', 'filename', 'renamed'], None),
+    ('Disbursement Queries', Disbursement_Queries.do_disb_queries, ['test', 'date', 'year', 'filename', 'renamed', 'renamed_disb'], None),
+    ('2nd LDR', Second_LDR.do_2nd_ldr, ['test', 'year', 'filename', 'renamed'], None),
+    ('End of Term', EndOfTerm_Queries.do_end_of_term_queries, ['test', 'date', 'year', 'filename', 'renamed'], None),
+    ('Day After LDR', Day_AfterLDR.do_day_after_ldr, ['test', 'year', 'filename', 'renamed'], None),
+    ('Direct Loan Pre-Outbound', Direct_Loan.dl_pre_outbound, ['test', 'date', 'year', 'filename', 'renamed'], 'direct_loan_flag'),
+    ('Alt Loan Pre-Outbound', Alt_Loan_Queries.al_pre_outbound, ['test', 'filename', 'renamed'], 'alt_loan_flag'),
+    ('Pre-Repackaging', PrePackaging_Queries.do_pre_repackaging, ['test', 'year', 'filename', 'renamed'], None),
+    ('Mid-Repackaging', Mid_Repack_Queries.do_mid_repack_queries, ['test', 'year', 'filename', 'renamed'], None),
+    ('After Repackaging', After_Repack_Queries.do_after_repackaging, ['test', 'year', 'filename', 'renamed'], None),
+    ('Daily Scholarships', Scholarships_Queries.do_daily_scholarships, ['test', 'year', 'filename', 'renamed'], None),
+    ('Weekly Scholarships', Scholarships_Queries.do_weekly_scholarships, ['test', 'year', 'filename', 'renamed'], None),
+    ('Budget Testing', Budget_Queries.do_budget_test_queries, ['test', 'date', 'year', 'filename', 'renamed'], None),
+    ('ATB and 3C', Atb_Fbill_3C_Queries.do_atb_fb_3c_queries, ['test', 'filename', 'renamed'], None),
+    ('Transfer Student Monitoring', Tsm_Queries.do_tsm_queries, ['test', 'filename', 'renamed'], None),
+]
 
 # Origination Filepaths
 test_dir_orig_folder = Path('C:/Testing Bob/Direct Loans/Origination')
@@ -270,251 +312,265 @@ def find_aid_year(filename):
 # Search for and return aid year in excel file
 def search_excel_file(filename):
     global folder_path
+
+    fullpath = folder_path / filename
+    cache_key = str(fullpath)
+    if cache_key in excel_parse_cache:
+        return excel_parse_cache[cache_key]
+
     has = False
     year = "0"
 
-    fullpath = folder_path / filename
-    workbook = None
-    with warnings.catch_warnings(record=True):
-        warnings.simplefilter("always")
-        with open(fullpath, "rb") as f:
-            in_mem_file = io.BytesIO(f.read())
-        workbook = openpyxl.load_workbook(in_mem_file, True)
-    sheet = workbook.active
-    sheet.reset_dimensions()
+    try:
+        with warnings.catch_warnings(record=True):
+            warnings.simplefilter("always")
+            with open(fullpath, "rb") as f:
+                in_mem_file = io.BytesIO(f.read())
+            workbook = openpyxl.load_workbook(in_mem_file, read_only=True, data_only=True)
+
+        sheet = workbook.active
+
+        # Read first 50 rows in a single streaming pass — far faster than repeated .cell() calls
+        all_rows = list(sheet.iter_rows(min_row=1, max_row=50, values_only=True))
+        workbook.close()
+
+    except Exception as e:
+        logger.warning(f"Error reading Excel file {filename}: {e}")
+        result = (False, "0")
+        excel_parse_cache[cache_key] = result
+        return result
+
     aid_cols = []
     aid_rows = []
     max_year = 0
 
-    cur_row = 1
-    cur_col = 1
-    # Locate cells containing the word 'Aid Year'
-    while cur_row < 6:
-        cur_col = 1
-        value = sheet.cell(cur_row, cur_col).value
-        while value is not None:
+    # Phase 1: scan first 5 rows for an Aid Year / Term header or inline year
+    for row_idx, row in enumerate(all_rows[:5]):
+        for col_idx, value in enumerate(row):
+            if value is None:
+                break  # original behaviour: stop at first None in a row
             strval = str(value)
             if is_aid_year_word(strval):
-                aid_cols.append(cur_col)
-                aid_rows.append(cur_row)
+                aid_cols.append(col_idx)
+                aid_rows.append(row_idx)
                 if is_aid_year_num(strval):
                     has = True
-                    year = "20" +  strval[-2:]
-                    workbook.close()
-                    return (has, year)
+                    year = "20" + strval[-2:]
+                    result = (has, year)
+                    excel_parse_cache[cache_key] = result
+                    return result
                 elif is_date(value):
                     has = True
-                    year = "20" +  strval[-2:] # Assumes date format w/ year at end
-                    workbook.close()
-                    return (has, year)
-
-            # Sometimes there's a "Term" value instead of an "Aid Year"
+                    year = "20" + strval[-2:]
+                    result = (has, year)
+                    excel_parse_cache[cache_key] = result
+                    return result
             elif is_term_word(strval):
                 term_year = parse_term_num(strval)
                 if term_year != -1:
                     has = True
                     year = str(term_year)
-                    workbook.close()  
-                    print("Used Term instead of Aid Year: " + str(filename))
-                    return (has, year)
+                    logger.info(f"Used Term instead of Aid Year: {filename}")
+                    result = (has, year)
+                    excel_parse_cache[cache_key] = result
+                    return result
 
-            cur_col += 1
-            value = sheet.cell(cur_row, cur_col).value
-        cur_row += 1
-
-    # Search for Aid Year in columns titled 'Aid Year'
+    # Phase 2: scan downward in each column that had an 'Aid Year' header
     for i in range(len(aid_cols)):
         aid_col = aid_cols[i]
-        aid_row = aid_rows[i]
-        curr_row = aid_row       
-        while sheet.cell(curr_row, 1).value is not None:
-            value = sheet.cell(curr_row, aid_col).value
-            if is_aid_year_word(value):
-                while sheet.cell(curr_row, 1).value is not None:
-                    value = sheet.cell(curr_row, aid_col).value
-                    if is_aid_year_num(value):
-                        value_int = int(value[-2:])
-                        if value_int > max_year:
-                            max_year = value_int
-                            has = True
-                            year = "20" +  str(value)[-2:]                     
-                    elif is_date(value):
-                        value_int = int(value[-2:])
-                        if value_int > max_year:
-                            max_year = value_int
-                            has = True
-                            year = "20" +  str(value)[-2:] # Assumes date format w/ year at end
-                    curr_row = curr_row + 1
+        for row in all_rows[aid_rows[i]:]:
+            if row[0] is None:  # col 1 None signals end of data rows
+                break
+            value = row[aid_col] if aid_col < len(row) else None
+            if value is None:
+                continue
+            strval = str(value)
+            if is_aid_year_num(strval):
+                value_int = int(strval[-2:])
+                if value_int > max_year:
+                    max_year = value_int
+                    has = True
+                    year = "20" + strval[-2:]
+            elif is_date(strval):
+                value_int = int(strval[-2:])
+                if value_int > max_year:
+                    max_year = value_int
+                    has = True
+                    year = "20" + strval[-2:]
 
-    workbook.close()
-    return (has, year)
+    result = (has, year)
+    excel_parse_cache[cache_key] = result
+    return result
 
 
-# Prints list of sorted files to terminal
-# **(For use when debugging)**
+# Prints list of sorted files to terminal (debugging)
 def output_sorted_files():
-    print("Num Odds = " + str(len(odd_aid_years)))
-    print("Odds: ")
-    for filename in odd_aid_years:
-        print("- " + filename)
-    print()
-
-    print("Num Evens = " + str(len(even_aid_years)))
-    print("Evens: ")
-    for filename in even_aid_years:
-        print("- " + filename)
-    print()
-
-    print("Num Unknown = " + str(len(unknown_list)))
-    print("Unknown: ")
-    for filename in unknown_list:
-        print("- " + filename)
-    print()
+    """Log summary of how files were categorized."""
+    logger.info(f"Processing Summary - Odd Years: {len(odd_aid_years)}, Even Years: {len(even_aid_years)}, Unknown: {len(unknown_list)}")
+    
+    if odd_aid_years:
+        logger.debug(f"Odd Years: {odd_aid_years}")
+    if even_aid_years:
+        logger.debug(f"Even Years: {even_aid_years}")
+    if unknown_list:
+        logger.info(f"Unknown files ({len(unknown_list)}): {unknown_list}")
 
 
 # Renames file to ensure no duplicates at desired location
 def rename_no_duplicates(folder_path, renamed):
-    filepath = str(folder_path / Path(renamed))
-    while(isfile(filepath)):
-        paren_index = filepath.find("(")
-        if paren_index > -1:
-            right_paren_index = filepath.find(")")
-            dup_num = filepath[paren_index + 1:right_paren_index]
-            dup_num = str(int(dup_num) + 1)           
-            filepath = filepath[:paren_index+1] + dup_num + filepath[right_paren_index:]
-        else:
-            dot_index = filepath.find(".")
-            filepath = filepath[:dot_index] + " (2)" + filepath[dot_index:]
-    return filepath
+    """Ensure unique filename in destination folder using Path objects."""
+    folder_path = Path(folder_path)
+    filepath = folder_path / renamed
+    
+    if not filepath.exists():
+        return str(filepath)
+    
+    # File exists, need to add counter
+    stem = filepath.stem  # filename without extension
+    suffix = filepath.suffix  # file extension
+    parent = filepath.parent
+    counter = 2
+    
+    while True:
+        new_filename = f"{stem} ({counter}){suffix}"
+        new_filepath = parent / new_filename
+        if not new_filepath.exists():
+            return str(new_filepath)
+        counter += 1
 
 # Renames, copies, and moves file to desired destination
 def do_query(name, renamed, legacy_archive, UOSFA_folder, year):
-
-    current_filepath = str(folder_path / Path(name))
-
+    """Process file: copy to archive, move to UOSFA folder."""
+    current_filepath = Path(folder_path) / name
+    
     if test:
-        UOSFA_destination = str(test_UOSFA_directory / UOSFA_folder)
+        UOSFA_destination = test_UOSFA_directory / UOSFA_folder
     else:       
-        UOSFA_destination = str(UOSFA_directory / UOSFA_folder)
-
-    # Make subfolders in UOSFA folder
-    #month = date[:2] + "-20" + date[-2:] # Possibly change to month name instead of month number
-    #datepath = Path(month) / Path(date) /Path(year)
-    #UOSFA_destination = str(Path(UOSFA_destination) / datepath) 
-    #if not os.path.isdir(UOSFA_destination):
-    #    os.makedirs(UOSFA_destination)
-
-    if UOSFA_folder == "None":
-       legacy_filepath = rename_no_duplicates(legacy_archive, renamed)
-       shutil.move(current_filepath, legacy_filepath)
-    else:
-        legacy_filepath = rename_no_duplicates(legacy_archive, renamed)
-        UOSFA_filepath = rename_no_duplicates(UOSFA_destination, renamed)
-        shutil.copy(current_filepath, legacy_filepath)
-        shutil.move(current_filepath, UOSFA_filepath)   
+        UOSFA_destination = UOSFA_directory / UOSFA_folder
+    
+    # Ensure destination folder exists
+    UOSFA_destination.mkdir(parents=True, exist_ok=True)
+    
+    try:
+        if UOSFA_folder == "None":
+            # Just move to archive, don't copy to UOSFA
+            legacy_filepath = rename_no_duplicates(legacy_archive, renamed)
+            shutil.move(str(current_filepath), legacy_filepath)
+            logger.info(f"Moved {name} to {legacy_filepath}")
+        else:
+            # Copy to archive, then move to UOSFA
+            legacy_filepath = rename_no_duplicates(legacy_archive, renamed)
+            UOSFA_filepath = rename_no_duplicates(UOSFA_destination, renamed)
+            shutil.copy(str(current_filepath), legacy_filepath)
+            shutil.move(str(current_filepath), UOSFA_filepath)
+            logger.info(f"Processed {name} -> {UOSFA_filepath}")
+    except Exception as e:
+        logger.error(f"Error processing {name}: {e}")
  
 
 # Returns the corresponding archive folder associated with the given UOSFA folder
 def get_unknown_archive(UOSFA_folder):
-    aid_year = str(int(current_aid_year) - 1) + "-" + str(current_aid_year)
+    """Map UOSFA folder to archive location using Path objects."""
+    aid_year = f"{int(current_aid_year) - 1}-{current_aid_year}"
     month_folder = date[:2] + "-20" + date[-2:]
-
-    if UOSFA_folder == "Alternative Loan Reports":
-        archive = os.path.realpath('O:/Systems/QUERIES/ALT Loans/')
-    elif UOSFA_folder == "Budget Reports":      
-        archive = os.path.realpath(os.path.join('O:/Systems/QUERIES/Budgets', aid_year, month_folder))
-    elif UOSFA_folder == "Daily Reports":
-        archive = os.path.realpath(os.path.join('O:/Systems/QUERIES/Daily', aid_year, month_folder))
-    elif UOSFA_folder == "Direct Loan Reports":
-        archive = os.path.realpath(os.path.join('O:/Systems/Direct Loans', 'DL Pre-Outbound'))
-    elif UOSFA_folder == "External Award Reports":
-        archive = os.path.realpath(os.path("O:/Systems/External Awards/External Award Queries"))
-    elif UOSFA_folder == "Financial Aid Reports":
-        archive = os.path.realpath('O:/Systems/QUERIES/')
-    elif UOSFA_folder == "Monthly Reports":
-        archive = os.path.realpath(os.path.join('O:/Systems/QUERIES/Monthly', month_folder))
-    elif UOSFA_folder == "Other Reports":
-        return None
-    elif UOSFA_folder == "Packaging Reports":
-        archive = os.path.realpath(os.path.join('O:/Systems/QUERIES/Packaging', aid_year, month_folder))
-    elif UOSFA_folder == "Pell Reports":
-        archive = os.path.realpath(os.path.join('O:/Systems/QUERIES/Pell Repackaging', aid_year))
-    elif UOSFA_folder == "SAP Reports":
-        archive = os.path.realpath(os.path.join('O:/Systems/QUERIES/SAP/', current_aid_year))
-    elif UOSFA_folder == "Scholarship Reports":
-        archive = os.path.realpath(os.path.join('O:/Systems/Scholarships', aid_year + ' Scholar/Queries'))
-    elif UOSFA_folder == "Unknown Reports":
-        return None
-    elif UOSFA_folder == "Weekly Reports":
-        archive = os.path.realpath(os.path.join('O:/Systems/QUERIES/Monday Weekly', aid_year, month_folder))
     
-    if not os.path.isdir(archive):
-        os.makedirs(archive)
-        
-    return archive
+    archive_map = {
+        "Alternative Loan Reports": Path('O:/Systems/QUERIES/ALT Loans/'),
+        "Budget Reports": Path('O:/Systems/QUERIES/Budgets') / aid_year / month_folder,
+        "Daily Reports": Path('O:/Systems/QUERIES/Daily') / aid_year / month_folder,
+        "Direct Loan Reports": Path('O:/Systems/Direct Loans/DL Pre-Outbound'),
+        "External Award Reports": Path('O:/Systems/External Awards/External Award Queries'),
+        "Financial Aid Reports": Path('O:/Systems/QUERIES/'),
+        "Monthly Reports": Path('O:/Systems/QUERIES/Monthly') / month_folder,
+        "Packaging Reports": Path('O:/Systems/QUERIES/Packaging') / aid_year / month_folder,
+        "Pell Reports": Path('O:/Systems/QUERIES/Pell Repackaging') / aid_year,
+        "SAP Reports": Path('O:/Systems/QUERIES/SAP/') / current_aid_year,
+        "Scholarship Reports": Path('O:/Systems/Scholarships') / f"{aid_year} Scholar/Queries",
+        "Weekly Reports": Path('O:/Systems/QUERIES/Monday Weekly') / aid_year / month_folder,
+    }
+    
+    # Return None for "Other Reports" and "Unknown Reports" (no archive)
+    if UOSFA_folder in ("Other Reports", "Unknown Reports"):
+        return None
+    
+    archive = archive_map.get(UOSFA_folder)
+    if archive:
+        archive.mkdir(parents=True, exist_ok=True)
+        return str(archive)
+    
+    logger.warning(f"Unknown UOSFA folder: {UOSFA_folder}")
+    return None
 
 
 # Renames and moves file to manually selected folder
 def do_query_unknown(name, renamed, destination, year, add_query):
+    """Process unknown file: user selects destination folder."""
     global query_dict
     
-    # Add query destination to query dictionary
+    # Add query destination to query dictionary for future runs
     if add_query:      
         if destination != "Unknown Reports":
             load_dictionary()
             cleaned = clean_filename(name)
             query_dict[cleaned] = destination
             save_dictionary()
+            logger.info(f"Learned: {cleaned} -> {destination}")
     
     # Copy to archive and move to UOSFA folder
-    current_filepath = str(folder_path / Path(name))
-
+    current_filepath = Path(folder_path) / name
+    
     if test:
-        UOSFA_destination = str(test_UOSFA_directory / destination)
+        UOSFA_destination = test_UOSFA_directory / destination
         archive = None
     else:       
-        UOSFA_destination = str(UOSFA_directory / destination)
+        UOSFA_destination = UOSFA_directory / destination
         archive = get_unknown_archive(destination)
+    
+    UOSFA_destination.mkdir(parents=True, exist_ok=True)
+    
+    try:
+        if archive is not None:
+            archive_filepath = rename_no_duplicates(archive, renamed)
+            shutil.copy(str(current_filepath), archive_filepath)
+            logger.info(f"Copied to archive: {archive_filepath}")
+        
+        destination_filepath = rename_no_duplicates(UOSFA_destination, renamed)
+        shutil.move(str(current_filepath), destination_filepath)
+        logger.info(f"Unknown file processed: {name} -> {destination}")
+    except Exception as e:
+        logger.error(f"Error processing unknown file {name}: {e}")
 
-    if archive is not None:
-        archive = rename_no_duplicates(archive, renamed)
-        shutil.copy(current_filepath, archive)
-
-    # Make subfolders in UOSFA folder
-    #month = date[:2] + "-20" + date[-2:] # Possibly change to month name instead of month number
-    #datepath = Path(month) / Path(date) /Path(year)
-    #UOSFA_destination = str(Path(UOSFA_destination) / datepath) 
-    #if not os.path.isdir(UOSFA_destination):
-        #os.makedirs(UOSFA_destination)
-
-    destination_filepath = rename_no_duplicates(UOSFA_destination, renamed)
-    shutil.move(current_filepath, destination_filepath)
 
 
-# Rename filename to be suitable for entry into query dictionary
-def clean_filename(filename):
+# Extracts base filename (without aid year, date, or instance suffix)
+def get_base_filename(filename):
+    """Extract core filename by removing aid year and instance markers."""
     if filename.endswith('.csv'):
         return filename
-
-    hay_result = has_aid_year(filename)
+    
     dot_index = filename.find(".")
     res = get_regex_result(filename, instance_regex)
     instance_index = -1
     if res is not None:
         instance_index = res.start()
-    if hay_result[0]:
+    
+    has_year, _ = has_aid_year(filename)
+    
+    if has_year:
         if instance_index > -1:
-            renamed = filename[:(instance_index)] + filename[dot_index:]
+            return filename[:instance_index] + filename[dot_index:]
         else:
-            renamed = filename[:(dot_index - 3)] + filename[dot_index:]
+            return filename[:(dot_index - 3)] + filename[dot_index:]
     else:
         if instance_index > -1:
-            renamed = filename[:(instance_index)] + filename[dot_index:]
+            return filename[:instance_index] + filename[dot_index:]
         else:
-            renamed = filename[:(dot_index)] + filename[dot_index:]
+            return filename[:dot_index] + filename[dot_index:]
 
-    return renamed
-
+# Clean filename for dictionary lookup (remove date/year info)
+def clean_filename(filename):
+    """Alias for get_base_filename - used for query dictionary lookups."""
+    return get_base_filename(filename)
 
 def get_regex_result(word, regex_list):
     for i in range(len(regex_list)):
@@ -523,50 +579,29 @@ def get_regex_result(word, regex_list):
             return res
     return None
 
+# Returns renamed filename with optional date prefix and aid year included
+def _format_renamed_filename(name, year, prefix=""):
+    """Core renaming logic: adds date/time prefix and year suffix."""
+    base = get_base_filename(name)
+    # base already has the extension, so extract it and rebuild
+    dot_index = base.find(".")
+    name_part = base[:dot_index]
+    extension = base[dot_index:]
+    
+    if prefix:
+        return f"{prefix} {name_part} {year[2:]}{extension}"
+    else:
+        return f"{name_part} {year[2:]}{extension}"
+
 # Returns renamed filename with current date and aid year included        
 def new_name(name, year):
-    hay_result = has_aid_year(name)
-    renamed = ""
-    dot_index = name.find(".")
-    res = get_regex_result(name, instance_regex)
-    instance_index = -1
-    if res is not None:
-        instance_index = res.start()
-
-    if hay_result[0]: 
-        if instance_index > -1:
-            renamed = date + " " + name[:(instance_index)] + " " + year[2:] + name[dot_index:]
-        else:
-            renamed = date + " " + name[:(dot_index - 3)] + " " + year[2:] + name[dot_index:]
-    else:
-        if instance_index > -1:
-            renamed = date + " " + name[:(instance_index)] + " " + year[2:] + name[dot_index:]
-        else:
-            renamed = date + " " + name[:(dot_index)] + " " + year[2:] + name[dot_index:]
-    return renamed
-
+    """Rename file with current date and aid year."""
+    return _format_renamed_filename(name, year, date)
 
 # Returns renamed filename with disbursement date and aid year included   
 def new_name_disb(name, year):
-    hay_result = has_aid_year(name)
-    renamed = ""
-    dot_index = name.find(".")
-    res = get_regex_result(name, instance_regex)
-    instance_index = -1
-    if res is not None:
-        instance_index = res.start()
-
-    if hay_result[0]:
-        if instance_index > -1:
-            renamed = disbursement_date + " " + name[:(instance_index)] + " " + year[2:] + name[dot_index:]
-        else:
-            renamed = disbursement_date + " " + name[:(dot_index - 3)] + " " + year[2:] + name[dot_index:]
-    else:
-        if instance_index > -1:
-            renamed = disbursement_date + " " + name[:(instance_index)] + " " + year[2:] + name[dot_index:]
-        else:
-            renamed = disbursement_date + " " + name[:(dot_index)] + " " + year[2:] + name[dot_index:]
-    return renamed
+    """Rename file with disbursement date and aid year."""
+    return _format_renamed_filename(name, year, disbursement_date)
 
 
 # Checks query files to determine the arguments to do_query
@@ -583,176 +618,153 @@ def move_files(filename, year):
     renamed = new_name(filename, year)
     renamed_disb = new_name_disb(filename, year)
     
-
-    info = "Empty" # Stores do_query parameters
-
-# Daily Queries
-    if info == "Empty":
-        info = Daily_Queries.do_dailies(test, date, year, filename, renamed)
-# Monday Weekly Queries
-    if info == "Empty": 
-        info = Monday_WeeklyQueries.do_monday_weeklies(test, date, year, filename, renamed)
-# Budget Queries
-    if info == "Empty": 
-        info = Budget_Queries.do_budget_queries(test, date, year, filename, renamed)
-# Packaging Queries
-    if info == "Empty": 
-        info = Packaging_Queries.do_packaging_queries(test, date, year, filename, renamed)
-# Monthly Queries
-    if info == "Empty": 
-        info = Monthly_Queries.do_monthlies(test, date, current_aid_year, filename, renamed)
-# Disbursement Queries
-    if info == "Empty": 
-        info = Disbursement_Queries.do_disb_queries(test, date, year, filename, renamed, renamed_disb)
-#2nd LDR Queries
-    if info == "Empty": 
-        info = Second_LDR.do_2nd_ldr(test, year, filename, renamed)
-# End of Term Queries
-    if info == "Empty": 
-        info = EndOfTerm_Queries.do_end_of_term_queries(test, date, year, filename, renamed)
-# Day After LDR Queries
-    if info == "Empty":
-        info = Day_AfterLDR.do_day_after_ldr(test, year, filename, renamed)
-# Direct Loans Pre-Outbound Queries
-    if info == "Empty": 
-        info = Direct_Loan.dl_pre_outbound(test, date, year, filename, renamed)
-        if info != "Empty":
-            direct_loan_flag = True # Notify that ORIG file must be moved
-## Alternative Loan Pre-Outbound Queries
-    if info == "Empty": 
-        info = Alt_Loan_Queries.al_pre_outbound(test, filename, renamed)
-        if info != "Empty":
-            alt_loan_flag = True # Notify that ORIG file must be moved
-# Pre-Repackaging Queries
-    if info == "Empty": 
-        info = PrePackaging_Queries.do_pre_repackaging(test, year, filename, renamed)
-# Mid-Repackaging Queries
-    if info == "Empty": 
-        info = Mid_Repack_Queries.do_mid_repack_queries(test, year, filename, renamed)
-# After Repackaging Queries
-    if info == "Empty": 
-        info = After_Repack_Queries.do_after_repackaging(test, year, filename, renamed)
-# Daily Scholarships Queries
-    if info == "Empty": 
-        info = Scholarships_Queries.do_daily_scholarships(test, year, filename, renamed)
-# Weekly Scholarships Queries
-    if info == "Empty": 
-        info = Scholarships_Queries.do_weekly_scholarships(test, year, filename, renamed)
-# Budget Testing Queries
-    if info == "Empty": 
-        info = Budget_Queries.do_budget_test_queries(test, date, year, filename, renamed)
-# ATB and 3C Queries
-    if info == "Empty": 
-        info = Atb_Fbill_3C_Queries.do_atb_fb_3c_queries(test, filename, renamed)
-# Remove extra files 
-    #if "FASTDVER" in filename or "FINAID_Checklist" in filename  or "ussfa09" in filename or "USSFA090 Reset" in filename or "O-A" in filename:
-    if any (re.search(regex_str, filename) for regex_str in remove_files):
-        os.remove(folder_path / Path(filename))
-        print("Removed " + filename)
-        if is_odd_year(year):
-            odd_aid_years.remove(filename)
-        else:
-            even_aid_years.remove(filename)
-        info = "Removed"
-# Transfer Student Monitoring
-    if info == "Empty": 
-        info = Tsm_Queries.do_tsm_queries(test, filename, renamed)
-# Files stored in .csv
+    info = "Empty"  # Stores do_query parameters
+    
+    # Handle files that should be removed
+    if any(re.search(regex_str, filename) for regex_str in remove_files):
+        try:
+            os.remove(folder_path / Path(filename))
+            logger.info(f"Removed {filename}")
+            if is_odd_year(year):
+                odd_aid_years.remove(filename)
+            else:
+                even_aid_years.remove(filename)
+        except Exception as e:
+            logger.error(f"Failed to remove {filename}: {e}")
+        return
+    
+    # Route through query modules using the routing dictionary
+    local_vars = {
+        'test': test,
+        'date': date,
+        'year': year,
+        'filename': filename,
+        'renamed': renamed,
+        'renamed_disb': renamed_disb,
+    }
+    
+    for query_name, query_func, arg_keys, flag_name in QUERY_MODULES:
+        if info == "Empty":
+            try:
+                # Build arguments based on arg_keys
+                args = [local_vars[key] for key in arg_keys]
+                info = query_func(*args)
+                
+                if info != "Empty" and flag_name:
+                    # Set flag if this query requires it
+                    if flag_name == 'direct_loan_flag':
+                        direct_loan_flag = True
+                    elif flag_name == 'alt_loan_flag':
+                        alt_loan_flag = True
+                    logger.info(f"Matched {query_name}: {filename}")
+            except Exception as e:
+                logger.warning(f"Error in {query_name}: {e}")
+                info = "Empty"  # Continue to next query
+    
+    # Check query dictionary for previously learned files
     if info == "Empty":
         cleaned = clean_filename(filename)
         if cleaned in query_dict:
             val = query_dict[cleaned]
+            logger.info(f"Using learned folder for {filename}: {val}")
             do_query_unknown(filename, renamed, val, year, False)
             return
-
-# Unknown File
+    
+    # Handle unknown or processed files
     if info == "Empty":
         unknown_list.append(str(filename))
-    elif info == "Removed":
-        pass
+        logger.info(f"Unknown file: {filename}")
     else:
         do_query(info[0], info[1], info[2], info[3], year)
 
 
 # Copy origination file for direct loans
+# Helper function to copy origination files (handles .doc and .docx)
+def _copy_orig_file_variants(source_base, dest_base, description):
+    """Try to copy file with .doc and .docx variants."""
+    source_base = Path(source_base)
+    dest_base = Path(dest_base)
+    dest_base.parent.mkdir(parents=True, exist_ok=True)
+    
+    variants = ['.doc', '.docx']
+    copied = False
+    
+    for variant in variants:
+        source = source_base.parent / (source_base.name + variant)
+        dest = dest_base.parent / (dest_base.name + variant)
+        
+        if source.exists() and not dest.exists():
+            try:
+                shutil.copy(source, dest)
+                logger.info(f"Copied {description}: {source} -> {dest}")
+                copied = True
+                break
+            except Exception as e:
+                logger.warning(f"Failed to copy {source}: {e}")
+    
+    return copied
+
+
+# Copy origination file for direct loans
 def move_direct_orig(filepath, dflt):
+    """Copy Direct Loan origination files (.doc/.docx variants)."""
     if test:
         source_folder = test_dir_orig_folder
-        dest_folder = test_UOSFA_directory / Path("Direct Loan Reports")
+        dest_folder = test_UOSFA_directory / "Direct Loan Reports"
     else:
         source_folder = dir_orig_folder
         dest_folder = Path("O:/UOSFA Reports/Direct Loan Reports")
-
-    renamed = date + " DL ORIG " + current_aid_year + ".doc"   
-
-    if (dflt):
-        source_file = source_folder / Path(date + " DL ORIG " + current_aid_year + ".doc")
-        source_filex = Path(str(source_file) + "x")
-        source_file2 = source_folder / Path(str(date + " DL ORIG " + current_aid_year + ".doc") + " (2)")
-        source_file2x = Path(str(source_file2) + "x")
-    else:
-        source_file = Path(filepath)
-        source_filex = Path(str(source_file) + "x")
-        source_file2 = Path(str(filepath) + " (2)")
-        source_file2x = Path(str(source_file2) + "x")
     
-    dest_file = dest_folder / Path(renamed)
-    dest_filex = Path(str(dest_file) + "x") 
-    dest_file2 = dest_folder / Path(str(renamed) + " (2)")
-    dest_file2x = Path(str(dest_file2) + "x")
+    base_name = f"{date} DL ORIG {current_aid_year}"
     
-    # Copy orig file
-    if not isfile(dest_file) and not isfile(dest_filex):
-        try:
-            shutil.copy(source_file, dest_file)
-        except FileNotFoundError as e:
-            try:
-                shutil.copy(source_filex, dest_filex)
-            except FileNotFoundError as e:
-                return False
-    
-    # Copy orig file (2)
-    if not isfile(dest_file2) and not isfile(dest_file2x):
-        try:
-            shutil.copy(source_file2, dest_file2)
-        except FileNotFoundError as e:
-            try:
-                shutil.copy(source_file2x, dest_file2x)
-            except FileNotFoundError as e:
-                pass
-    return True
+    try:
+        if dflt:
+            # Try default location first
+            source_base = source_folder / base_name
+        else:
+            # Use user-provided path
+            source_base = Path(filepath)
+        
+        dest_folder.mkdir(parents=True, exist_ok=True)
+        
+        # Copy main file and variant
+        main_copied = _copy_orig_file_variants(source_base, dest_folder / base_name, "DL ORIG")
+        
+        # Try to copy (2) variant if exists
+        source_variant = source_base.parent / f"{source_base.name} (2)"
+        variant_copied = _copy_orig_file_variants(source_variant, dest_folder / f"{base_name} (2)", "DL ORIG (2)")
+        
+        return main_copied or variant_copied
+    except Exception as e:
+        logger.error(f"Error in move_direct_orig: {e}")
+        return False
 
 
 # Copy origination file for alt loans
 def move_alt_orig(filepath, dflt):
+    """Copy Alternative Loan origination files (.doc/.docx variants)."""
     if test:
         source_folder = test_alt_orig_folder
-        dest_folder = test_UOSFA_directory / Path("Alternative Loan Reports")
+        dest_folder = test_UOSFA_directory / "Alternative Loan Reports"
     else:
         source_folder = alt_orig_folder
         dest_folder = Path("O:/UOSFA Reports/Alternative Loan Reports")
-
-    renamed = date + " ALT Loan ORIG " + current_aid_year + ".doc" 
-
-    if (dflt):
-        source_file = source_folder / Path(date + " ALT Loan ORIG " + current_aid_year + ".doc")
-        source_filex = Path(str(source_file) + "x")
-    else:
-        source_file = Path(filepath)
-        source_filex = Path(str(source_file) + "x")
-
-    dest_file = dest_folder / Path(renamed)
-    dest_filex = Path(str(dest_file) + "x")
     
-    if not isfile(dest_file) and not isfile(dest_filex):
-        try:
-            shutil.copy(source_file, dest_file)
-        except FileNotFoundError as e:
-            try:
-                shutil.copy(source_filex, dest_filex)
-            except FileNotFoundError as e:
-                return False
-    return True
+    base_name = f"{date} ALT Loan ORIG {current_aid_year}"
+    
+    try:
+        if dflt:
+            source_base = source_folder / base_name
+        else:
+            source_base = Path(filepath)
+        
+        dest_folder.mkdir(parents=True, exist_ok=True)
+        main_copied = _copy_orig_file_variants(source_base, dest_folder / base_name, "ALT ORIG")
+        
+        return main_copied
+    except Exception as e:
+        logger.error(f"Error in move_alt_orig: {e}")
+        return False
 
     
 # Sort all files in directory based on aid year, and send to corresponding folder
@@ -761,71 +773,90 @@ def sort_files():
     global test
     global unknown_list
 
-    # Old Version of File Select
-    #folder_path = Path(os.getcwd())
-    #for filename in os.listdir("."):
-    #    pFilename = Path(filename)
-    #    find_aid_year(pFilename)
-
     root = tkinter.Tk()    
     root.withdraw()
     directory = filedialog.askdirectory()
     root.destroy()
+    
     if directory == "":
+        logger.warning("No directory selected")
         return
 
     # Skip nested folders
     folder_path = directory
     files = [filepath for filepath in os.listdir(directory) if os.path.isfile(Path(directory) / Path(filepath))]
     
-    for filename in files: 
+    logger.info(f"Processing directory: {directory}")
+    logger.info(f"Found {len(files)} files to process")
+    
+    skipped_count = 0
+    for i, filename in enumerate(files, 1):
         # Skip certain files
         if any(word in filename for word in skip_files):
+            logger.debug(f"Skipping file (blacklisted): {filename}")
+            skipped_count += 1
             continue
 
         # Send file to corresponding folder
+        logger.info(f"Processing [{i}/{len(files)}]: {filename}")
         pFilename = Path(filename)
         aid_year = find_aid_year(pFilename)  
         move_files(filename, aid_year)
+    
+    logger.info(f"Skipped {skipped_count} files, processed {len(files) - skipped_count} files")
 
 
 # Saves the Query Dictionary to a .csv file
 def save_dictionary():
-    with open(dict_path, "w", newline="\n") as data:
-        w = csv.writer(data)
-        for key, value in query_dict.items():
-            w.writerow([key, value])
-    print("Dictionary Saved")
+    try:
+        with open(dict_path, "w", newline="\n") as data:
+            w = csv.writer(data)
+            for key, value in query_dict.items():
+                w.writerow([key, value])
+        logger.debug(f"Dictionary saved: {len(query_dict)} entries")
+    except Exception as e:
+        logger.error(f"Error saving dictionary: {e}")
 
 # Loads the Query Dictionary from a .csv file
 def load_dictionary():
     global query_dict
-    with open(dict_path) as data:
-        reader = csv.reader(data)
-        for rows in reader:
-            if rows:
-                key = rows[0]
-                value = rows[1]
-                query_dict[key] = value
-    print("Dictionary Loaded")
+    try:
+        with open(dict_path) as data:
+            reader = csv.reader(data)
+            for rows in reader:
+                if rows:
+                    key = rows[0]
+                    value = rows[1]
+                    query_dict[key] = value
+        logger.debug(f"Dictionary loaded: {len(query_dict)} entries")
+    except FileNotFoundError:
+        logger.info("No existing query dictionary found")
+    except Exception as e:
+        logger.error(f"Error loading dictionary: {e}")
 
 def test_save():
     testdict = {"query": "folder", "UFAA": "Budget Reports"}
-    with open(dict_path, "w", newline="\n") as data:
-        w = csv.writer(data)
-        for key, value in testdict.items():
-            w.writerow([key, value])
-    print("Test Save")
+    try:
+        with open(dict_path, "w", newline="\n") as data:
+            w = csv.writer(data)
+            for key, value in testdict.items():
+                w.writerow([key, value])
+        logger.debug("Test dictionary saved")
+    except Exception as e:
+        logger.error(f"Error in test_save: {e}")
 
 def test_load():
     testdict = {}
-    with open(dict_path) as data:
-        reader = csv.reader(data)
-        for rows in reader:
-            key = rows[0]
-            value = rows[1]
-            testdict[key] = value
-    print("Test Load")
+    try:
+        with open(dict_path) as data:
+            reader = csv.reader(data)
+            for rows in reader:
+                key = rows[0]
+                value = rows[1]
+                testdict[key] = value
+        logger.debug(f"Test dictionary loaded: {len(testdict)} entries")
+    except Exception as e:
+        logger.error(f"Error in test_load: {e}")
 
 
 # Reset global variables and initialize with user input
@@ -852,33 +883,26 @@ def initialize(year, is_test):
     alt_loan_flag = False
     direct_loan_flag = False
 
-
     current_aid_year = year
     today = datetime.date.today()
     if today.weekday() == 0:
-        disbursement_date = today - datetime.timedelta(days = 3)
+        disbursement_date = today - datetime.timedelta(days=3)
         disbursement_date = disbursement_date.strftime("%m-%d-%y")
     else:
-        disbursement_date = today - datetime.timedelta(days = 1)
+        disbursement_date = today - datetime.timedelta(days=1)
         disbursement_date = disbursement_date.strftime("%m-%d-%y")
-    if test:
-        print("Disbursement Date: " + disbursement_date)
-
+    
+    logger.info(f"Initialized - Aid Year: {year}, Test Mode: {is_test}, Disbursement Date: {disbursement_date}")
     load_dictionary()
 
 def run(year, is_test):
-    if is_test:
-        initialize(year, is_test)
-        sort_files()
-        output_sorted_files()
-        print("Done")
-        
-    else:
-        initialize(year, is_test)
-        sort_files()
-        output_sorted_files()
-        print("Done")
-
+    logger.info(f"Starting file processing - Aid Year: {year}, Test Mode: {is_test}")
+    
+    initialize(year, is_test)
+    sort_files()
+    output_sorted_files()
+    
+    logger.info("File processing complete")
     return (direct_loan_flag, alt_loan_flag, unknown_list)
         
 
