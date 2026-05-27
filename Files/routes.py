@@ -2,11 +2,13 @@
 Routing rules: every filename pattern → (archive key, UOSFA folder).
 
 To add a new query, append a Rule to ROUTES.
-  archive  - key passed to FileProcessor.get_archive(); see processor.py for the full map
-  folder   - UOSFA subfolder name (e.g. "Daily Reports"); use None to archive-only (no UOSFA move)
-  flag     - "direct_loan" or "alt_loan" if this file triggers an origination copy
+  archive       - key passed to FileProcessor.get_archive(); see processor.py for the full map
+  folder        - UOSFA subfolder name (e.g. "Daily Reports"); use None to archive-only (no UOSFA move)
+  flag          - "direct_loan" or "alt_loan" if this file triggers an origination copy
   use_disb_date - rename with disbursement date instead of today
-  rename_fn - override standard rename: callable(filename, year, today_date) -> new_name
+  rename_fn     - override standard rename for the archive copy: callable(filename, year, today_date) -> new_name
+  uosfa_name_fn - override rename for the UOSFA destination only: callable(filename, year, today_date) -> new_name
+  overwrite     - overwrite the UOSFA destination if it already exists (default: add numeric suffix)
 """
 from __future__ import annotations
 from dataclasses import dataclass, field
@@ -22,6 +24,8 @@ class Rule:
     flag: str = ""
     use_disb_date: bool = False
     rename_fn: Optional[Callable[[str, str, str], str]] = None
+    uosfa_name_fn: Optional[Callable[[str, str, str], str]] = None
+    overwrite: bool = False
 
 
 # ── Match helpers ──────────────────────────────────────────────────────────
@@ -40,6 +44,11 @@ def _eot_rename(name: str, year: str, date: str) -> str:
 # Award-summary rename: keep original filename, no year suffix
 def _award_rename(name: str, year: str, date: str) -> str:
     return f"{date} {name}"
+
+# DB-file UOSFA name: original filename unchanged (no date, no year suffix)
+def _db_uosfa_name(name: str, year: str, *_) -> str:
+    dot = name.rfind(".")
+    return f"{name[:dot]} {year[2:]}{name[dot:]}"
 
 
 ROUTES: list[Rule] = [
@@ -482,6 +491,7 @@ ROUTES: list[Rule] = [
     Rule("EOT_WUE_ACAD_PROG_REV",           has("EOT_WUE_ACAD_PROG_REV"),           "sap", "SAP Reports", rename_fn=_eot_rename),
 
     # ── Direct Loan (triggers origination copy) ───────────────────────────
+    Rule("DLOUT",                          has("DLOUT"),                           "dl",        "Direct Loan Reports", flag="dlout"),
     Rule("UUFA_DL_COD_EDITS",              sw("UUFA_DL_COD_EDITS"),               "dl_response","Direct Loan Reports", flag="direct_loan"),
     Rule("UUFA_DLO_PRORATION_ENROLL",      sw("UUFA_DLO_PRORATION_ENROLL"),       "dl_heal",   "Direct Loan Reports", flag="direct_loan"),
     Rule("UUFA_DLR_ORIG_TRNS_PEND",        sw("UUFA_DLR_ORIG_TRNS_PEND"),         "dl",        "Direct Loan Reports", flag="direct_loan"),
@@ -597,4 +607,11 @@ ROUTES: list[Rule] = [
     Rule("_NSLDS_VAR_FLAG9",               has("_NSLDS_VAR_FLAG9"),               "tsm",  "Financial Aid Reports"),
     Rule("UUFA_ALERT_TSM_REVIEW_NSLDS",    has("UUFA_ALERT_TSM_REVIEW_NSLDS"),    "tsm",  "Financial Aid Reports"),
     Rule("UUFA_ALERT_TSM_SUSPEND",         has("UUFA_ALERT_TSM_SUSPEND"),         "tsm",  "Financial Aid Reports"),
+
+    # ── Dashboard Files (archived with date; saved to UOSFA without date, overwrite) ──
+    Rule("UUFA_DB_PACKAGING_SUMMARY",     sw("UUFA_DB_PACKAGING_SUMMARY"),     "dashboard", "UUFA_DB_PACKAGING_SUMMARY",     uosfa_name_fn=_db_uosfa_name, overwrite=True),
+    Rule("UUFA_DB_ISIRS_RECEIVED_UNDUP",  sw("UUFA_DB_ISIRS_RECEIVED_UNDUP"),  "dashboard", "UUFA_DB_ISIRS_RECEIVED_UNDUP",  uosfa_name_fn=_db_uosfa_name, overwrite=True),
+    Rule("UUFA_DB_ISIRS_RECEIVED_ALL",    sw("UUFA_DB_ISIRS_RECEIVED_ALL"),    "dashboard", "UUFA_DB_ISIRS_RECEIVED_ALL",    uosfa_name_fn=_db_uosfa_name, overwrite=True),
+    Rule("UUFA_DB_ISIRS_LOADED_UNDUP",    sw("UUFA_DB_ISIRS_LOADED_UNDUP"),    "dashboard", "UUFA_DB_ISIRS_LOADED_UNDUP",    uosfa_name_fn=_db_uosfa_name, overwrite=True),
+    Rule("UUFA_DB_ISIRS_LOADED_ALL",      sw("UUFA_DB_ISIRS_LOADED_ALL"),      "dashboard", "UUFA_DB_ISIRS_LOADED_ALL",      uosfa_name_fn=_db_uosfa_name, overwrite=True),
 ]

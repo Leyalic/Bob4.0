@@ -63,6 +63,7 @@ class FileProcessor:
         self.folder_path: Path = Path()
         self.direct_loan_flag  = False
         self.alt_loan_flag     = False
+        self.dlout_flag        = False
         self.unknown_list: list[str] = []
         self._query_dict: dict[str, str] = {}
         self._excel_cache: dict[str, tuple[bool, str]] = {}
@@ -130,6 +131,7 @@ class FileProcessor:
             "disb_failure":   df  / f"Disb Failure {ay}",
             "refund":         sys / "QUERIES/Refund Credit Holds" / mo,
             "pre_disb":       sys / "QUERIES/Disbursement/Pre-Disbursement Queries",
+            "dashboard":      sys / "QUERIES/Dashboard Queries",
         }
         path = table.get(key)
         if path is None:
@@ -141,12 +143,18 @@ class FileProcessor:
 
     def _base_filename(self, name: str) -> str:
         """Strip date/year/instance markers, return core name + extension."""
-        if name.endswith(".csv"):
-            return name
-        dot   = name.find(".")
-        inst  = _INSTANCE_RE.search(name)
+        dot  = name.find(".")
+        inst = _INSTANCE_RE.search(name)
+        # For CSVs, skip matches that are exactly 4-digit years (e.g. _2026.)
+        # so we preserve year-in-name but still strip run-ID suffixes (e.g. -20041765)
+        if inst and name.endswith(".csv"):
+            digits = re.sub(r"[^0-9]", "", inst.group())
+            if len(digits) == 4:
+                inst = None
         inst_i = inst.start() if inst else -1
         has_y  = bool(_YEAR_IN_NAME.search(name))
+        if name.endswith(".csv"):
+            return (name[:inst_i] if inst_i > -1 else name[:dot]) + name[dot:]
         if has_y:
             return (name[:inst_i] if inst_i > -1 else name[: dot - 3]) + name[dot:]
         return (name[:inst_i] if inst_i > -1 else name[:dot]) + name[dot:]
@@ -302,9 +310,15 @@ class FileProcessor:
 
     # ── File processing ────────────────────────────────────────────────────
 
-    def _do_query(self, name: str, renamed: str, archive: Path, uosfa_folder: str) -> None:
-        """Copy file to archive; move to UOSFA folder (unless folder is None)."""
+    def _do_query(self, name: str, renamed: str, archive: Path, uosfa_folder: str,
+                  uosfa_name: Optional[str] = None, overwrite: bool = False) -> None:
+        """Copy file to archive; move to UOSFA folder (unless folder is None).
+
+        uosfa_name  - filename to use at the UOSFA destination (defaults to renamed)
+        overwrite   - replace an existing UOSFA file instead of adding a numeric suffix
+        """
         src = self.folder_path / name
+        uosfa_filename = uosfa_name if uosfa_name is not None else renamed
         try:
             if uosfa_folder == "None":
                 dest = self._unique_path(archive, renamed)
@@ -313,8 +327,9 @@ class FileProcessor:
             else:
                 uosfa_dest_dir = self.uosfa_dir / uosfa_folder
                 uosfa_dest_dir.mkdir(parents=True, exist_ok=True)
-                arc_dest   = self._unique_path(archive, renamed)
-                uosfa_dest = self._unique_path(uosfa_dest_dir, renamed)
+                arc_dest = self._unique_path(archive, renamed)
+                uosfa_dest = (uosfa_dest_dir / uosfa_filename if overwrite
+                              else self._unique_path(uosfa_dest_dir, uosfa_filename))
                 shutil.copy(str(src), arc_dest)
                 shutil.move(str(src), uosfa_dest)
                 logger.info(f"Processed: {name} -> {uosfa_dest}")
@@ -371,8 +386,13 @@ class FileProcessor:
                     self.direct_loan_flag = True
                 elif rule.flag == "alt_loan":
                     self.alt_loan_flag = True
+                elif rule.flag == "dlout":
+                    self.dlout_flag = True
 
-                self._do_query(filename, renamed, archive, rule.folder)
+                uosfa_name = (rule.uosfa_name_fn(self._base_filename(filename), year, self.date)
+                              if rule.uosfa_name_fn is not None else None)
+                self._do_query(filename, renamed, archive, rule.folder,
+                               uosfa_name=uosfa_name, overwrite=rule.overwrite)
                 return
 
         # Check the learned dictionary
@@ -416,6 +436,14 @@ class FileProcessor:
         self._copy_orig(src_base.parent / (src_base.name + " (2)"),
                         dest_dir, "DL ORIG (2)")
         return ok
+
+    def move_dlout_orig(self, filepath: Optional[Path] = None) -> bool:
+        src_dir  = config.TEST_DL_ORIG_DIR   if self.is_test else config.DL_ORIG_DIR
+        dest_dir = (config.TEST_UOSFA_DIR / "Direct Loan Reports" if self.is_test
+                    else config.UOSFA_DIR / "Direct Loan Reports")
+        base_name = f"{self.date} DLOUT {self.year}"
+        src_base  = (src_dir / base_name) if filepath is None else Path(filepath)
+        return self._copy_orig(src_base, dest_dir, "DLOUT")
 
     def move_alt_orig(self, filepath: Optional[Path] = None) -> bool:
         src_dir  = config.TEST_ALT_ORIG_DIR  if self.is_test else config.ALT_ORIG_DIR
@@ -476,12 +504,11 @@ class FileProcessor:
             f"unknown={len(self.unknown_list)}"
         )
 
-    def run(self) -> tuple[bool, bool, list[str]]:
+    def run(self) -> tuple[bool, bool, bool, list[str]]:
         """
-        Ask the user to pick a source folder, process all files in it,
-        and return (direct_loan_flag, alt_loan_flag, unknown_list).
-        This method does NOT open a tkinter dialog; the caller must call
-        set_source_folder() first.
+        Process all files in folder_path and return
+        (direct_loan_flag, alt_loan_flag, dlout_flag, unknown_list).
+        Caller must call set_source_folder() first.
         """
         self.process_all()
-        return self.direct_loan_flag, self.alt_loan_flag, self.unknown_list
+        return self.direct_loan_flag, self.alt_loan_flag, self.dlout_flag, self.unknown_list

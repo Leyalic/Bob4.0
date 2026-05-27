@@ -140,7 +140,7 @@ class BobApp(tk.Frame):
 
         self._processor = FileProcessor(year, is_test)
         self._processor.set_source_folder(directory)
-        direct_loan_flag, alt_loan_flag, unknown_list = self._processor.run()
+        direct_loan_flag, alt_loan_flag, dlout_flag, unknown_list = self._processor.run()
 
         if unknown_list:
             self._unknown_list = list(unknown_list)
@@ -151,6 +151,9 @@ class BobApp(tk.Frame):
 
         if alt_loan_flag:
             self._run_alt_orig()
+
+        if dlout_flag:
+            self._run_dlout_orig()
 
         self._run_label.config(text="Processing complete!", fg="green")
         self._run_btn["state"] = "normal"
@@ -269,6 +272,17 @@ class BobApp(tk.Frame):
         self._root.wait_window(wind)
         if self._orig_path:
             self._processor.move_alt_orig(self._orig_path)
+
+    def _run_dlout_orig(self) -> None:
+        if self._processor.move_dlout_orig():
+            return
+        p = self._processor
+        filename = f"{p.date} DLOUT {p.year}.doc"
+        pathname = "O:/Systems/Direct Loans/Origination/"
+        wind = self._create_orig_window(filename, pathname)
+        self._root.wait_window(wind)
+        if self._orig_path:
+            self._processor.move_dlout_orig(self._orig_path)
 
 
 def main() -> None:
