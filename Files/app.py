@@ -25,7 +25,7 @@ class BobApp(tk.Frame):
         root.geometry("850x550")
 
         # ── Header ────────────────────────────────────────────────────────
-        Label(root, text="Welcome to the Do Queries Process").pack(pady=(10, 0))
+        Label(root, text="Hello, my name is Bob. I do queries.").pack(pady=(10, 0))
         try:
             self._img = tk.PhotoImage(file="uosfa.png")
             Label(root, image=self._img).pack()
@@ -63,18 +63,18 @@ class BobApp(tk.Frame):
                                command=self._open_popup, height=2, width=10)
         self._run_btn.pack(side=tk.BOTTOM, anchor="center", padx=18, pady=18)
 
-        self._test_var = tk.BooleanVar(value=True)
+        self._test_var = tk.BooleanVar(value=False)
         self._test_check = Checkbutton(root,
-                                       text="Test Mode  (files go to Testing folder)",
+                                       text="PRODUCTION MODE  (files will be moved for real!)",
                                        variable=self._test_var,
                                        command=self._toggle_test_mode,
-                                       fg="blue",
+                                       fg="red",
                                        font=("Times New Roman bold", 11))
         self._test_check.pack(side=tk.BOTTOM, anchor="center", padx=8, pady=4)
 
         self._reset_btn = Button(root, text="Reset Test Folders",
                                  command=self._reset_test_folder)
-        self._reset_btn.pack(side=tk.BOTTOM, anchor="s", padx=8, pady=8)
+        # reset button starts hidden — only shown when test mode is on
 
     # ── Validation ─────────────────────────────────────────────────────────
 
