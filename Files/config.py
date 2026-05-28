@@ -30,7 +30,7 @@ LOG_DIR   = Path("./logs")
 
 # ── File-filter lists ──────────────────────────────────────────────────────
 # Files whose name contains any of these strings are skipped entirely
-SKIP_CONTAINS = [".zip", ".lnk", " DL ORIG ", " ALT Loan ORIG "]
+SKIP_CONTAINS = [".zip", ".lnk", " DL ORIG ", " ALT Loan ORIG ", "idsa", "igsa", "igco", "igsg"]
 
 # Files matching any of these patterns are deleted from the source folder
 REMOVE_PATTERNS = [

@@ -4,7 +4,9 @@ import tkinter as tk
 from pathlib import Path
 from tkinter import Button, Checkbutton, Entry, Label, Radiobutton, Toplevel, filedialog
 
-from Files.processor import FileProcessor, LOG_FILE
+import Files.processor as _processor
+from Files import config
+from Files.processor import FileProcessor
 
 
 class BobApp(tk.Frame):
@@ -63,14 +65,18 @@ class BobApp(tk.Frame):
                                command=self._open_popup, height=2, width=10)
         self._run_btn.pack(side=tk.BOTTOM, anchor="center", padx=18, pady=18)
 
+        mode_frame = tk.Frame(root)
+        mode_frame.pack(side=tk.BOTTOM, anchor="center", padx=8, pady=4)
+        Label(mode_frame, text="Run Mode:",
+              font=("Times New Roman bold", 11)).pack(side=tk.LEFT, padx=(0, 8))
         self._test_var = tk.BooleanVar(value=False)
-        self._test_check = Checkbutton(root,
+        self._test_check = Checkbutton(mode_frame,
                                        text="PRODUCTION MODE  (files will be moved for real!)",
                                        variable=self._test_var,
                                        command=self._toggle_test_mode,
                                        fg="red",
                                        font=("Times New Roman bold", 11))
-        self._test_check.pack(side=tk.BOTTOM, anchor="center", padx=8, pady=4)
+        self._test_check.pack(side=tk.LEFT)
 
         self._reset_btn = Button(root, text="Reset Test Folders",
                                  command=self._reset_test_folder)
@@ -115,7 +121,7 @@ class BobApp(tk.Frame):
         print("Done Resetting")
 
     def _open_log(self) -> None:
-        os.startfile(str(LOG_FILE))
+        os.startfile(str(_processor.LOG_FILE))
 
     # ── Main run ───────────────────────────────────────────────────────────
 
@@ -149,11 +155,11 @@ class BobApp(tk.Frame):
         if direct_loan_flag:
             self._run_direct_orig()
 
+        if direct_loan_flag or dlout_flag:
+            self._run_dlout_orig()
+
         if alt_loan_flag:
             self._run_alt_orig()
-
-        if dlout_flag:
-            self._run_dlout_orig()
 
         self._run_label.config(text="Processing complete!", fg="green")
         self._run_btn["state"] = "normal"
@@ -202,7 +208,7 @@ class BobApp(tk.Frame):
         ]
 
         Label(self._select_window,
-              text="The following file could not be sorted. Please select a destination folder.",
+              text="The following file could not be sorted. Please select a destination folder or click the x in top right corner to skip.",
               padx=10, pady=5).pack()
         Label(self._select_window, text=filename, fg="#00f", padx=10).pack()
 
@@ -256,8 +262,8 @@ class BobApp(tk.Frame):
             return
         p = self._processor
         filename = f"{p.date} DL ORIG {p.year}.doc"
-        pathname = "O:/Systems/Direct Loans/Origination/"
-        wind = self._create_orig_window(filename, pathname)
+        src_dir = config.TEST_DL_ORIG_DIR if p.is_test else config.DL_ORIG_DIR
+        wind = self._create_orig_window(filename, str(src_dir))
         self._root.wait_window(wind)
         if self._orig_path:
             self._processor.move_direct_orig(self._orig_path)
@@ -267,8 +273,8 @@ class BobApp(tk.Frame):
             return
         p = self._processor
         filename = f"{p.date} ALT Loan ORIG {p.year}.doc"
-        pathname = "O:/Systems/QUERIES/ALT Loans/"
-        wind = self._create_orig_window(filename, pathname)
+        src_dir = config.TEST_ALT_ORIG_DIR if p.is_test else config.ALT_ORIG_DIR
+        wind = self._create_orig_window(filename, str(src_dir))
         self._root.wait_window(wind)
         if self._orig_path:
             self._processor.move_alt_orig(self._orig_path)
@@ -278,8 +284,8 @@ class BobApp(tk.Frame):
             return
         p = self._processor
         filename = f"{p.date} DLOUT {p.year}.doc"
-        pathname = "O:/Systems/Direct Loans/Origination/"
-        wind = self._create_orig_window(filename, pathname)
+        src_dir = config.TEST_DL_ORIG_DIR if p.is_test else config.DL_ORIG_DIR
+        wind = self._create_orig_window(filename, str(src_dir))
         self._root.wait_window(wind)
         if self._orig_path:
             self._processor.move_dlout_orig(self._orig_path)

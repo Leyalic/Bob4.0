@@ -610,6 +610,7 @@ ROUTES: list[Rule] = [
 
     # ── Dashboard Files (archived with date; saved to UOSFA without date, overwrite) ──
     Rule("UUFA_DB_PACKAGING_SUMMARY",     sw("UUFA_DB_PACKAGING_SUMMARY"),     "dashboard", "UUFA_DB_PACKAGING_SUMMARY",     uosfa_name_fn=_db_uosfa_name, overwrite=True),
+    Rule("UUFA_DB_PACKAGING_AMOUNTS",     sw("UUFA_DB_PACKAGING_AMOUNTS"),     "dashboard", "UUFA_DB_PACKAGING_AMOUNTS",     uosfa_name_fn=_db_uosfa_name, overwrite=True),
     Rule("UUFA_DB_ISIRS_RECEIVED_UNDUP",  sw("UUFA_DB_ISIRS_RECEIVED_UNDUP"),  "dashboard", "UUFA_DB_ISIRS_RECEIVED_UNDUP",  uosfa_name_fn=_db_uosfa_name, overwrite=True),
     Rule("UUFA_DB_ISIRS_RECEIVED_ALL",    sw("UUFA_DB_ISIRS_RECEIVED_ALL"),    "dashboard", "UUFA_DB_ISIRS_RECEIVED_ALL",    uosfa_name_fn=_db_uosfa_name, overwrite=True),
     Rule("UUFA_DB_ISIRS_LOADED_UNDUP",    sw("UUFA_DB_ISIRS_LOADED_UNDUP"),    "dashboard", "UUFA_DB_ISIRS_LOADED_UNDUP",    uosfa_name_fn=_db_uosfa_name, overwrite=True),

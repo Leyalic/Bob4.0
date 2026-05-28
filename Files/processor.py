@@ -24,13 +24,24 @@ from Files.routes import ROUTES
 
 # ── Logging ────────────────────────────────────────────────────────────────
 config.LOG_DIR.mkdir(exist_ok=True)
-LOG_FILE = config.LOG_DIR / f"bob_{time.strftime('%Y%m%d_%H%M%S')}.log"
+_LOG_TIMESTAMP = time.strftime("%Y%m%d_%H%M%S")
+LOG_FILE = config.LOG_DIR / f"bob_{_LOG_TIMESTAMP}.log"
 logging.basicConfig(
     level=logging.DEBUG,
     format="%(asctime)s %(levelname)s %(message)s",
-    handlers=[logging.FileHandler(LOG_FILE), logging.StreamHandler()],
+    handlers=[logging.FileHandler(LOG_FILE, delay=True), logging.StreamHandler()],
 )
 logger = logging.getLogger(__name__)
+
+
+def _update_log_filename(path: Path) -> None:
+    """Point the root FileHandler at a new path (safe while delay=True, before first write)."""
+    global LOG_FILE
+    LOG_FILE = path
+    for h in logging.root.handlers:
+        if isinstance(h, logging.FileHandler):
+            h.baseFilename = str(path.resolve())
+            break
 
 # ── Year-detection regexes ──────────────────────────────────────────────────
 _AID_YEAR_WORDS  = re.compile(r"Aid[\s]?Y(?:ea)?r|Year", re.IGNORECASE)
@@ -51,6 +62,9 @@ class FileProcessor:
     def __init__(self, year: str, is_test: bool) -> None:
         self.year    = year
         self.is_test = is_test
+
+        suffix = "_test" if is_test else ""
+        _update_log_filename(config.LOG_DIR / f"bob_{_LOG_TIMESTAMP}{suffix}.log")
 
         self.date   = time.strftime("%x").replace("/", "-")
         self.month  = self.date[:2] + "-20" + self.date[-2:]
@@ -411,19 +425,24 @@ class FileProcessor:
 
     def _copy_orig(self, src_base: Path, dest_dir: Path, label: str) -> bool:
         dest_dir.mkdir(parents=True, exist_ok=True)
-        copied = False
+        stem = src_base.stem  # strip any existing extension (handles manual filepath selection)
+        # Already at destination — count as success
         for ext in (".doc", ".docx"):
-            src  = src_base.parent / (src_base.name + ext)
-            dest = dest_dir / (src_base.name + ext)
-            if src.exists() and not dest.exists():
+            if (dest_dir / (stem + ext)).exists():
+                logger.info(f"Already at destination ({label}): {dest_dir / (stem + ext)}")
+                return True
+        # Try to copy from source
+        for ext in (".doc", ".docx"):
+            src  = src_base.parent / (stem + ext)
+            dest = dest_dir / (stem + ext)
+            if src.exists():
                 try:
                     shutil.copy(src, dest)
                     logger.info(f"Copied {label}: {src} -> {dest}")
-                    copied = True
-                    break
+                    return True
                 except Exception as exc:
                     logger.warning(f"Failed to copy {label} {src}: {exc}")
-        return copied
+        return False
 
     def move_direct_orig(self, filepath: Optional[Path] = None) -> bool:
         src_dir  = config.TEST_DL_ORIG_DIR   if self.is_test else config.DL_ORIG_DIR
@@ -433,12 +452,12 @@ class FileProcessor:
         src_base  = (src_dir / base_name) if filepath is None else Path(filepath)
         ok = self._copy_orig(src_base, dest_dir, "DL ORIG")
         # Also attempt (2) variant
-        self._copy_orig(src_base.parent / (src_base.name + " (2)"),
+        self._copy_orig(src_base.parent / (src_base.stem + " (2)"),
                         dest_dir, "DL ORIG (2)")
         return ok
 
     def move_dlout_orig(self, filepath: Optional[Path] = None) -> bool:
-        src_dir  = config.TEST_DL_ORIG_DIR   if self.is_test else config.DL_ORIG_DIR
+        src_dir  = config.TEST_DL_ORIG_DIR  if self.is_test else config.DL_ORIG_DIR
         dest_dir = (config.TEST_UOSFA_DIR / "Direct Loan Reports" if self.is_test
                     else config.UOSFA_DIR / "Direct Loan Reports")
         base_name = f"{self.date} DLOUT {self.year}"
