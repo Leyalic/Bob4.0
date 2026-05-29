@@ -2,6 +2,7 @@
 All paths and settings for the Bob file-processing pipeline.
 Change values here — nowhere else needs to be edited for path/env changes.
 """
+import sys
 from pathlib import Path
 
 # ── Destination roots ──────────────────────────────────────────────────────
@@ -25,8 +26,18 @@ TEST_DL_ORIG_DIR = TEST_SYSTEMS_DIR / "Direct Loans/Origination"
 TEST_ALT_ORIG_DIR= TEST_SYSTEMS_DIR / "ALT Loans"
 
 # ── Misc ───────────────────────────────────────────────────────────────────
-DICT_PATH = Path("./Files/Query_Dictionary.csv")
-LOG_DIR   = Path("./logs")
+def _app_root() -> Path:
+    """Return the root directory for data files regardless of how the app is launched."""
+    if getattr(sys, "frozen", False):
+        # PyInstaller bundle: use the directory containing the exe
+        return Path(sys.executable).parent
+    # Development: two levels up from this file (Files/config.py → project root)
+    return Path(__file__).parent.parent
+
+_ROOT       = _app_root()
+DICT_PATH   = _ROOT / "Files" / "Query_Dictionary.csv"
+IGNORE_PATH = _ROOT / "Files" / "Ignore_List.txt"
+LOG_DIR     = _ROOT / "logs"
 
 # ── File-filter lists ──────────────────────────────────────────────────────
 # Files whose name contains any of these strings are skipped entirely

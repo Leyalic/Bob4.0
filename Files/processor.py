@@ -26,10 +26,12 @@ from Files.routes import ROUTES
 config.LOG_DIR.mkdir(exist_ok=True)
 _LOG_TIMESTAMP = time.strftime("%Y%m%d_%H%M%S")
 LOG_FILE = config.LOG_DIR / f"bob_{_LOG_TIMESTAMP}.log"
+_file_handler = logging.FileHandler(LOG_FILE, delay=True)
+_file_handler.setLevel(logging.INFO)
 logging.basicConfig(
     level=logging.DEBUG,
     format="%(asctime)s %(levelname)s %(message)s",
-    handlers=[logging.FileHandler(LOG_FILE, delay=True), logging.StreamHandler()],
+    handlers=[_file_handler, logging.StreamHandler()],
 )
 logger = logging.getLogger(__name__)
 
@@ -80,9 +82,11 @@ class FileProcessor:
         self.dlout_flag        = False
         self.unknown_list: list[str] = []
         self._query_dict: dict[str, str] = {}
+        self._ignore_set: set[str] = set()
         self._excel_cache: dict[str, tuple[bool, str]] = {}
 
         self._load_query_dict()
+        self._load_ignore_list()
         logger.info(f"Initialized — year={year} test={is_test} disb_date={self.disb_date}")
 
     # ── Path helpers ───────────────────────────────────────────────────────
@@ -409,8 +413,11 @@ class FileProcessor:
                                uosfa_name=uosfa_name, overwrite=rule.overwrite)
                 return
 
-        # Check the learned dictionary
+        # Check the ignore list and learned dictionary
         base = self._base_filename(filename)
+        if base in self._ignore_set:
+            logger.info(f"Ignored: {filename}")
+            return
         if base in self._query_dict:
             folder = self._query_dict[base]
             logger.info(f"Learned route for {filename}: {folder}")
@@ -480,9 +487,9 @@ class FileProcessor:
                 for row in csv.reader(f):
                     if len(row) >= 2:
                         self._query_dict[row[0]] = row[1]
-            logger.debug(f"Dict loaded: {len(self._query_dict)} entries")
+            logger.debug(f"Dict loaded: {len(self._query_dict)} entries from {config.DICT_PATH}")
         except FileNotFoundError:
-            pass
+            logger.warning(f"Dictionary not found: {config.DICT_PATH}")
         except Exception as exc:
             logger.error(f"Dict load error: {exc}")
 
@@ -493,6 +500,33 @@ class FileProcessor:
             logger.debug(f"Dict saved: {len(self._query_dict)} entries")
         except Exception as exc:
             logger.error(f"Dict save error: {exc}")
+
+    def _load_ignore_list(self) -> None:
+        try:
+            with open(config.IGNORE_PATH) as f:
+                for line in f:
+                    entry = line.strip()
+                    if entry:
+                        self._ignore_set.add(entry)
+            logger.debug(f"Ignore list loaded: {len(self._ignore_set)} entries")
+        except FileNotFoundError:
+            pass
+        except Exception as exc:
+            logger.error(f"Ignore list load error: {exc}")
+
+    def _save_ignore_list(self) -> None:
+        try:
+            with open(config.IGNORE_PATH, "w", newline="\n") as f:
+                for entry in sorted(self._ignore_set):
+                    f.write(entry + "\n")
+        except Exception as exc:
+            logger.error(f"Ignore list save error: {exc}")
+
+    def ignore_file(self, filename: str) -> None:
+        base = self._base_filename(filename)
+        self._ignore_set.add(base)
+        self._save_ignore_list()
+        logger.info(f"Added to ignore list: {base}")
 
     # ── Main entry points ──────────────────────────────────────────────────
 
